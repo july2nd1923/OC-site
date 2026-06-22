@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>나의 캐릭터 도감</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:linear-gradient(180deg,#E6F6FB 0%,#EAF9FF 55%,#F2FCFF 100%);
+    --accent1:#5BC2E0; --accent2:#2E86AB;
+    --text-strong:#2F6B85; --text-soft:#6B98A8;
+    --border:#B7E3F0; --soft:#D7F1F8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;background:var(--bg);font-family:'Nunito',sans-serif;color:var(--text-strong);}
+  h1,h2,h3{font-family:'Baloo 2',sans-serif;margin:0;}
+  button{font-family:inherit;cursor:pointer;}
+  a{color:inherit;}
+  #decor{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
+  #decor div{position:absolute;border-radius:50%;}
+  #app{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:16px 20px 80px;}
+  header{display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:8px 0 16px;flex-wrap:wrap;}
+  .ghost-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--text-strong);border:1.5px solid var(--border);border-radius:999px;padding:8px 14px;font-weight:700;font-size:13.5px;}
+  .primary-btn{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--accent1),var(--accent2));color:#fff;border:none;border-radius:999px;padding:10px 18px;font-weight:600;font-size:14px;box-shadow:0 4px 12px rgba(80,150,180,.35);}
+  .small-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--soft);color:var(--text-strong);border:none;border-radius:12px;padding:9px 12px;font-weight:700;font-size:13px;}
+  input,textarea,select{width:100%;padding:10px 12px;border-radius:12px;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;font-size:14px;background:#fff;color:var(--text-strong);}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--accent1);outline-offset:1px;}
+  .field-group{margin-bottom:14px;}
+  .field-group label{display:block;font-weight:700;font-size:13px;color:var(--text-soft);margin-bottom:5px;}
+  .grid-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:20px;}
+  .card{background:rgba(255,255,255,.75);border:1px solid var(--border);border-radius:20px;padding:14px;position:relative;box-shadow:0 4px 14px rgba(80,150,180,.10);text-align:left;}
+  .washi{position:absolute;top:-10px;left:18px;width:46px;height:18px;transform:rotate(-6deg);border-radius:3px;opacity:.85;box-shadow:0 1px 2px rgba(0,0,0,.1);}
+  .thumb{width:100%;aspect-ratio:1/1;border-radius:16px;overflow:hidden;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;margin-bottom:10px;border:3px solid #fff;}
+  .card .name{font-family:'Baloo 2',sans-serif;font-weight:600;font-size:17px;margin:0 0 2px;}
+  .card .sub{font-size:12.5px;color:var(--text-soft);margin:0;}
+  .detail-grid{display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:28px;}
+  @media (max-width:640px){
+    body{font-size:15px;}
+    #app{padding:10px 14px 70px;}
+    header{padding:6px 0 12px;gap:8px;}
+    header > div:first-child{flex-wrap:wrap;gap:5px;}
+    .season-btn{padding:6px 9px;font-size:15px;}
+    .ghost-btn{padding:7px 11px;font-size:12.5px;}
+    .primary-btn{padding:10px 16px;font-size:13.5px;width:100%;justify-content:center;}
+    .small-btn{padding:10px 12px;font-size:13px;}
+    .grid-gallery{grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:12px;}
+    .card{padding:10px;border-radius:16px;}
+    .card .name{font-size:15px;}
+    .card .sub{font-size:11.5px;}
+    .detail-grid{grid-template-columns:1fr;gap:18px;}
+    .hero-img{border-radius:18px;}
+    .editor-box{padding:18px 16px;border-radius:16px;}
+    .editor-box h2{font-size:19px;}
+    .form-row-3{grid-template-columns:1fr 1fr!important;}
+    .form-row-2{grid-template-columns:1fr!important;}
+    .field-group{margin-bottom:12px;}
+    input,textarea,select{font-size:16px;padding:11px 12px;} /* 16px 이상으로 iOS 확대 방지 */
+    .modal-box{padding:18px 16px;border-radius:16px;max-width:92vw;}
+    .toast{font-size:12.5px;padding:9px 16px;bottom:16px;max-width:88vw;text-align:center;}
+    .confirm-box{flex-direction:column;align-items:flex-start;}
+    .confirm-box > div{width:100%;display:flex;gap:8px;}
+    .confirm-box .small-btn{flex:1;}
+    [style*="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"] > *{flex:1 1 100%!important;}
+    .postype-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  }
+  @media (max-width:380px){
+    .grid-gallery{grid-template-columns:repeat(auto-fill,minmax(115px,1fr));}
+  }
+  @media (max-width:640px){.detail-grid{grid-template-columns:1fr;}}
+  .hero-img{width:100%;aspect-ratio:1/1;border-radius:24px;overflow:hidden;background-size:cover;background-position:center;border:4px solid #fff;box-shadow:0 6px 20px rgba(60,120,150,.18);}
+  .profile-box{margin-top:14px;border-radius:16px;padding:12px 16px;background:var(--soft);}
+  .profile-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed rgba(80,150,180,.25);font-size:14px;}
+  .profile-row span:first-child{color:var(--text-soft);font-weight:700;}
+  .section{margin-bottom:24px;}
+  .section h3{color:var(--accent2);font-size:16px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+  .body-text{font-size:14.5px;line-height:1.7;white-space:pre-wrap;margin:0;}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--border);border-radius:999px;padding:6px 12px;font-size:13px;}
+  .chip.soft{background:var(--soft);}
+  .postype-link{display:flex;align-items:center;gap:8px;background:#EAF3FA;border:1.5px solid #D6E8F4;border-radius:12px;padding:9px 12px;font-size:13.5px;color:#5C7A91;text-decoration:none;font-weight:700;}
+  .comment-item{background:var(--soft);border:1px solid var(--border);border-radius:12px;padding:9px 12px;margin-bottom:8px;}
+  .editor-box{background:rgba(255,255,255,.85);border:1px solid var(--border);border-radius:22px;padding:24px 26px;box-shadow:0 6px 20px rgba(80,150,180,.10);}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text-strong);color:#fff;padding:10px 18px;border-radius:999px;font-size:13.5px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:50;}
+  .confirm-box{background:#FFF0F0;border:1.5px solid #F3CFCF;border-radius:14px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:13.5px;color:#a85d5d;}
+  .season-btn{padding:6px 10px;font-size:16px;}
+  .empty{text-align:center;padding:80px 20px;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(40,80,100,.35);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px;}
+  .modal-box{background:#fff;border-radius:20px;padding:22px 24px;max-width:340px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.2);}
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+</style>
+</head>
+<body>
+<div id="decor"></div>
+<div id="app">불러오는 중...</div>
+
+<script>
+/* ============== 설정: 여기에 본인 Supabase 정보를 채워주세요 ============== */
+const SUPABASE_URL = "https://zdpgflwcqfstuhaqmiea.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkcGdmbHdjcWZzdHVoYXFtaWVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNzkyOTMsImV4cCI6MjA5NzY1NTI5M30.a6XNLmLuIFEQ2ExNEsB0RVT1XyQozb_HSVyTRV7XimQ";
+/* ========================================================================= */
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* 편집 잠금: 아래 비밀번호를 본인이 원하는 것으로 바꿔주세요 */
+const EDIT_PASSWORD = "oc0702";
+
+let _loggedIn = sessionStorage.getItem("oc-owner") === "1";
+function isLoggedIn(){ return _loggedIn; }
+function doLogin(pw){ 
+  if(pw === EDIT_PASSWORD){ _loggedIn=true; sessionStorage.setItem("oc-owner","1"); return true; }
+  return false;
+}
+function doLogout(){ _loggedIn=false; sessionStorage.removeItem("oc-owner"); }
+
+const SEASONS = {
+  spring: { label:"봄 하늘", emoji:"🌸", bg:"linear-gradient(180deg,#EAF6FF 0%,#F3F0FF 55%,#FFF5FA 100%)", a1:"#8ECDEB", a2:"#C9A8E8", ts:"#4F7A99", tf:"#8FA8B8", bd:"#BFE3F2", sf:"#DCEFFB", decor:["#D8EFFA","#E6E0FA","#FBE4EE"] },
+  summer: { label:"여름 바다", emoji:"🌊", bg:"linear-gradient(180deg,#E6F6FB 0%,#EAF9FF 55%,#F2FCFF 100%)", a1:"#5BC2E0", a2:"#2E86AB", ts:"#2F6B85", tf:"#6B98A8", bd:"#B7E3F0", sf:"#D7F1F8", decor:["#CFF0FA","#E0F7FF","#BFE8F5"] },
+  autumn: { label:"가을 노을", emoji:"🍁", bg:"linear-gradient(180deg,#FFF6E9 0%,#FFEFE0 55%,#FFF8F0 100%)", a1:"#F0B27E", a2:"#D9824A", ts:"#8A5A33", tf:"#B58A66", bd:"#F0CDA0", sf:"#FBE3C4", decor:["#FBE0B8","#F7D2B0","#FCEBD0"] },
+  winter: { label:"겨울 눈하늘", emoji:"❄️", bg:"linear-gradient(180deg,#F0F6FF 0%,#EAF0FB 55%,#F7FAFF 100%)", a1:"#8FB4E0", a2:"#5C7FB8", ts:"#46608A", tf:"#8295B0", bd:"#C7D9F0", sf:"#DCE7F7", decor:["#E3ECFB","#F0F4FC","#D6E4F7"] },
+};
+const PALETTE = ["#FADADD","#FFE5B4","#D7F0D0","#CDE7F0","#E3D7F4","#FFF1B8"];
+function hashStr(s){let h=0;for(let i=0;i<s.length;i++)h=(h<<5)-h+s.charCodeAt(i);return h;}
+function pickColor(seed){return PALETTE[Math.abs(hashStr(seed))%PALETTE.length];}
+function uid(){return Math.random().toString(36).slice(2,10)+Date.now().toString(36);}
+function esc(s){return (s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+
+function applySeason(key){
+  const t = SEASONS[key] || SEASONS.summer;
+  const r = document.documentElement.style;
+  r.setProperty("--bg", t.bg);
+  r.setProperty("--accent1", t.a1);
+  r.setProperty("--accent2", t.a2);
+  r.setProperty("--text-strong", t.ts);
+  r.setProperty("--text-soft", t.tf);
+  r.setProperty("--border", t.bd);
+  r.setProperty("--soft", t.sf);
+  document.getElementById("decor").innerHTML = `
+    <div style="top:-80px;left:-60px;width:280px;height:280px;background:radial-gradient(circle, ${t.decor[0]} 0%, transparent 70%)"></div>
+    <div style="bottom:-100px;right:-80px;width:360px;height:360px;background:radial-gradient(circle, ${t.decor[1]} 0%, transparent 70%)"></div>
+    <div style="top:40%;right:10%;width:200px;height:200px;background:radial-gradient(circle, ${t.decor[2]} 0%, transparent 70%)"></div>`;
+  localStorage.setItem("oc-season", key);
+}
+
+/* ----------------------------- 데이터 계층 ----------------------------- */
+let charsCache = {};
+
+async function fetchAllChars(){
+  const { data, error } = await sb.from("characters").select("*").order("created_at", { ascending:true });
+  if (error) { console.error(error); toast("불러오기 실패: " + error.message); return []; }
+  charsCache = {};
+  data.forEach(row => charsCache[row.id] = row.data);
+  return data;
+}
+async function saveCharacter(c){
+  const { error } = await sb.from("characters").upsert({ id: c.id, data: c, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+async function deleteCharacter(id){
+  const { error } = await sb.from("characters").delete().eq("id", id);
+  if (error) throw error;
+}
+async function fetchComments(charId){
+  const { data, error } = await sb.from("comments").select("*").eq("char_id", charId).order("created_at", { ascending:true });
+  if (error) { console.error(error); return []; }
+  return data;
+}
+async function addComment(charId, nick, body){
+  const { error } = await sb.from("comments").insert({ id: uid(), char_id: charId, nick, body });
+  if (error) throw error;
+}
+async function deleteComment(id){
+  const { error } = await sb.from("comments").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ------------------------------- 라우팅 -------------------------------- */
+function go(hash){ location.hash = hash; }
+window.addEventListener("hashchange", render);
+
+function toast(msg){
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 2200);
+}
+
+/* ------------------------------- 렌더링 -------------------------------- */
+async function render(){
+  const app = document.getElementById("app");
+  const hash = location.hash.slice(1) || "/";
+
+  const header = renderHeader();
+
+  if (hash === "/" || hash === "") {
+    app.innerHTML = header + renderGallery();
+    bindHeaderEvents();
+    bindGalleryEvents();
+    return;
+  }
+  if (hash.startsWith("/char/")) {
+    const id = hash.split("/char/")[1];
+    app.innerHTML = header + `<div id="detail-slot">불러오는 중...</div>`;
+    bindHeaderEvents();
+    const c = charsCache[id];
+    if (!c) { document.getElementById("detail-slot").innerHTML = `<p class="body-text">캐릭터를 찾을 수 없어요.</p>`; return; }
+    const comments = await fetchComments(id);
+    document.getElementById("detail-slot").outerHTML = renderDetail(c, comments);
+    bindDetailEvents(c);
+    return;
+  }
+  if (hash.startsWith("/edit/")) {
+    if (!isLoggedIn()) {
+      app.innerHTML = header + `<p class="body-text">편집은 로그인한 오너만 할 수 있어요. 헤더의 "편집 로그인" 버튼을 눌러주세요.</p>`;
+      bindHeaderEvents();
+      return;
+    }
+    const id = hash.split("/edit/")[1];
+    const existing = id !== "new" ? charsCache[id] : null;
+    app.innerHTML = header + renderEditor(existing);
+    bindHeaderEvents();
+    bindEditorEvents(existing);
+    return;
+  }
+  app.innerHTML = header + `<p class="body-text">페이지를 찾을 수 없어요.</p>`;
+  bindHeaderEvents();
+}
+
+function renderHeader(){
+  const cur = localStorage.getItem("oc-season") || "summer";
+  return `
+  <header>
+    <div style="display:flex;gap:6px;flex:1;">
+      ${Object.entries(SEASONS).map(([k,t]) => `
+        <button class="ghost-btn season-btn" data-season="${k}" title="${t.label}"
+          style="background:${cur===k?'var(--soft)':'#fff'};border-color:${cur===k?'var(--accent1)':'var(--border)'}">${t.emoji}</button>
+      `).join("")}
+    </div>
+    <button class="ghost-btn" id="auth-btn">${isLoggedIn() ? "🔓 로그아웃" : "🔒 편집 로그인"}</button>
+  </header>
+  <div id="login-modal-slot"></div>`;
+}
+function bindHeaderEvents(){
+  document.querySelectorAll(".season-btn").forEach(b=>{
+    b.onclick = () => { applySeason(b.dataset.season); render(); };
+  });
+  document.getElementById("auth-btn").onclick = () => {
+    if (isLoggedIn()) {
+      doLogout();
+      toast("로그아웃했어요");
+      render();
+    } else {
+      showLoginModal();
+    }
+  };
+}
+function showLoginModal(){
+  document.getElementById("login-modal-slot").innerHTML = `
+    <div class="modal-overlay" id="login-overlay">
+      <form class="modal-box" id="login-form">
+        <h3 style="margin-bottom:8px;">편집 로그인</h3>
+        <p class="body-text" style="font-size:13px;margin-bottom:14px;">편집 비밀번호를 입력하세요.</p>
+        <div class="field-group"><label>비밀번호</label><input id="login-pw" type="password" required autofocus></div>
+        <p id="login-error" style="color:#D88;font-size:12.5px;display:none;"></p>
+        <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+          <button type="button" class="ghost-btn" id="login-cancel">취소</button>
+          <button type="submit" class="primary-btn" id="login-submit">로그인</button>
+        </div>
+      </form>
+    </div>`;
+  document.getElementById("login-overlay").onclick = (e) => { if (e.target.id === "login-overlay") document.getElementById("login-modal-slot").innerHTML = ""; };
+  document.getElementById("login-cancel").onclick = () => { document.getElementById("login-modal-slot").innerHTML = ""; };
+  document.getElementById("login-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const password = document.getElementById("login-pw").value;
+    const errEl = document.getElementById("login-error");
+    errEl.style.display = "none";
+    const ok = doLogin(password);
+    if (!ok) {
+      errEl.textContent = "비밀번호가 맞지 않아요";
+      errEl.style.display = "block";
+      return;
+    }
+    document.getElementById("login-modal-slot").innerHTML = "";
+    toast("로그인됐어요 ✨");
+    render();
+  };
+}
+
+function renderGallery(){
+  const ids = Object.keys(charsCache);
+  const newBtnHtml = isLoggedIn() ? `<button class="primary-btn" id="new-char-btn">+ 새 캐릭터</button>` : "";
+  if (ids.length === 0) {
+    return `<div class="empty">
+      <p style="font-family:'Baloo 2',sans-serif;font-size:20px;color:var(--text-soft);margin-bottom:18px;">아직 등록된 캐릭터가 없어요</p>
+      ${isLoggedIn() ? `<button class="primary-btn" id="new-char-btn">+ 첫 캐릭터 만들기</button>` : `<p class="body-text" style="font-size:13px;">오너가 로그인해서 캐릭터를 등록하면 여기에 표시돼요.</p>`}
+    </div>`;
+  }
+  return `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
+      ${newBtnHtml}
+    </div>
+    <div class="grid-gallery">
+      ${ids.map(id => {
+        const c = charsCache[id];
+        const color = pickColor(id);
+        return `
+        <button class="card" data-open="${id}">
+          <div class="washi" style="background:${color}"></div>
+          <div class="thumb" style="background-image:${c.image?`url('${esc(c.image)}')`:`linear-gradient(135deg, ${color}, #fff)`}"></div>
+          <p class="name">${esc(c.name)||"이름 없음"}</p>
+          <p class="sub">${[c.job, c.age && c.age+"세"].filter(Boolean).map(esc).join(" · ") || "정보 없음"}</p>
+        </button>`;
+      }).join("")}
+    </div>`;
+}
+function bindGalleryEvents(){
+  const newBtn = document.getElementById("new-char-btn");
+  if (newBtn) newBtn.onclick = () => go("/edit/new");
+  document.querySelectorAll("[data-open]").forEach(el => {
+    el.onclick = () => go("/char/" + el.dataset.open);
+  });
+}
+
+function profileRow(label, value){
+  return `<div class="profile-row"><span>${label}</span><span>${esc(value)||"-"}</span></div>`;
+}
+
+function renderDetail(c, comments){
+  const color = pickColor(c.id);
+  const rels = c.relationships || [];
+  const extRels = c.externalRelationships || [];
+  const postypes = c.postypes || [];
+  const gallery = c.gallery || [];
+
+  return `<div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+      <button class="ghost-btn" id="back-btn">← 목록으로</button>
+      ${isLoggedIn() ? `
+      <div style="display:flex;gap:8px;">
+        <button class="ghost-btn" id="edit-btn">✎ 수정</button>
+        <button class="ghost-btn" id="del-btn" style="color:#D88;border-color:#F3CFCF;">🗑 삭제</button>
+      </div>` : ""}
+    </div>
+    <div id="confirm-slot"></div>
+
+    <div class="detail-grid">
+      <div>
+        <div class="hero-img" style="background-image:${c.image?`url('${esc(c.image)}')`:`linear-gradient(135deg, ${color}, #fff)`}"></div>
+        <div class="profile-box">
+          ${profileRow("이름", c.name)}
+          ${profileRow("직업", c.job)}
+          ${profileRow("나이", c.age ? c.age+"세" : "")}
+          ${profileRow("생일", c.birthday)}
+          ${profileRow("키", c.height)}
+          ${profileRow("몸무게", c.weight)}
+          ${profileRow("체형", c.bodyType)}
+          ${profileRow("기타", c.extra)}
+        </div>
+      </div>
+      <div>
+        <div class="section"><h3>🌍 세계관</h3><p class="body-text">${esc(c.worldview)||"아직 작성된 세계관이 없어요."}</p></div>
+        <div class="section"><h3>💗 성격</h3><p class="body-text">${esc(c.personality)||"아직 작성된 성격이 없어요."}</p></div>
+        <div class="section"><h3>🎨 취미</h3><p class="body-text">${esc(c.hobby)||"아직 작성된 취미가 없어요."}</p></div>
+
+        <div class="section">
+          <h3>💞 관계도</h3>
+          ${rels.length === 0 && extRels.length === 0 ? `<p class="body-text">등록된 관계가 없어요.</p>` : ""}
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            ${rels.map(r => {
+              const t = charsCache[r.targetId];
+              if (!t) return "";
+              return `<button class="chip" data-open="${r.targetId}">
+                <span style="width:8px;height:8px;border-radius:50%;background:${pickColor(t.id||r.targetId)};display:inline-block;"></span>
+                <strong>${esc(t.name)}</strong><span style="color:var(--text-soft)"> · ${esc(r.label)}</span>
+              </button>`;
+            }).join("")}
+            ${extRels.map(r => `<span class="chip soft">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--accent1);display:inline-block;"></span>
+              <strong>${esc(r.name)}</strong><span style="color:var(--text-soft)"> · ${esc(r.label)}</span>
+              ${r.owner ? `<span style="color:var(--text-soft);font-size:11px;">(${esc(r.owner)} 소유)</span>` : ""}
+            </span>`).join("")}
+          </div>
+        </div>
+
+        ${gallery.length ? `<div class="section"><h3>🖼 이미지 & 일러스트</h3>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;">
+            ${gallery.map(src => `<img src="${esc(src)}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:3px solid #fff;">`).join("")}
+          </div></div>` : ""}
+
+        ${postypes.length ? `<div class="section"><h3>📖 포스타입 연재</h3>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${postypes.map(p => `<a class="postype-link" href="${esc(p.url)}" target="_blank" rel="noreferrer">📖 ${esc(p.title)||esc(p.url)}</a>`).join("")}
+          </div></div>` : ""}
+
+        <div class="section">
+          <h3>💬 댓글 ${comments.length ? `(${comments.length})` : ""}</h3>
+          <p class="body-text" style="font-size:12px;color:var(--text-soft);margin-bottom:10px;">이름(닉네임)을 적고 자유롭게 남겨주세요. 누구나 볼 수 있는 공개 댓글이에요.</p>
+          <div id="comment-list">
+            ${comments.length === 0 ? `<p class="body-text">아직 댓글이 없어요. 첫 댓글을 남겨보세요!</p>` : comments.map(cm => `
+              <div class="comment-item" data-comment-id="${cm.id}">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                  <strong style="font-size:13.5px;">${esc(cm.nick)}</strong>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:11px;color:var(--text-soft);">${new Date(cm.created_at).toLocaleDateString("ko-KR")}</span>
+                    ${isLoggedIn() ? `<button class="del-comment-btn" data-id="${cm.id}" style="background:none;border:none;cursor:pointer;color:var(--text-soft);">✕</button>` : ""}
+                  </div>
+                </div>
+                <p class="body-text" style="margin-top:4px;font-size:13.5px;">${esc(cm.body)}</p>
+              </div>
+            `).join("")}
+          </div>
+          <form id="comment-form" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+            <input id="comment-nick" placeholder="닉네임" maxlength="20" required>
+            <div style="display:flex;gap:8px;">
+              <input id="comment-body" placeholder="댓글을 남겨주세요" maxlength="300" required style="flex:1;">
+              <button type="submit" class="small-btn">등록</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindDetailEvents(c){
+  document.getElementById("back-btn").onclick = () => go("/");
+  document.querySelectorAll("[data-open]").forEach(el => { el.onclick = () => go("/char/" + el.dataset.open); });
+
+  const editBtn = document.getElementById("edit-btn");
+  if (editBtn) editBtn.onclick = () => go("/edit/" + c.id);
+
+  const delBtn = document.getElementById("del-btn");
+  if (delBtn) delBtn.onclick = () => {
+    document.getElementById("confirm-slot").innerHTML = `
+      <div class="confirm-box">
+        <span>'${esc(c.name)}' 캐릭터를 정말 삭제할까요? 되돌릴 수 없어요.</span>
+        <div style="display:flex;gap:8px;">
+          <button class="small-btn" id="confirm-del" style="background:#F0A8A8;color:#fff;">삭제</button>
+          <button class="small-btn" id="cancel-del" style="background:#eee;">취소</button>
+        </div>
+      </div>`;
+    document.getElementById("confirm-del").onclick = async () => {
+      try {
+        await deleteCharacter(c.id);
+        delete charsCache[c.id];
+        toast("캐릭터를 삭제했어요");
+        go("/");
+      } catch (err) { toast("삭제 실패: " + err.message); }
+    };
+    document.getElementById("cancel-del").onclick = () => { document.getElementById("confirm-slot").innerHTML = ""; };
+  };
+
+  const form = document.getElementById("comment-form");
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const nick = document.getElementById("comment-nick").value.trim();
+    const body = document.getElementById("comment-body").value.trim();
+    if (!nick || !body) return;
+    try {
+      await addComment(c.id, nick, body);
+      render();
+    } catch (err) { toast("댓글 등록 실패: " + err.message); }
+  };
+  document.querySelectorAll(".del-comment-btn").forEach(b => {
+    b.onclick = async () => {
+      try { await deleteComment(b.dataset.id); render(); }
+      catch (err) { toast("삭제 실패: " + err.message); }
+    };
+  });
+}
+
+function renderEditor(existing){
+  const c = existing || { id: uid(), name:"", job:"", age:"", birthday:"", height:"", weight:"", bodyType:"",
+    worldview:"", personality:"", hobby:"", extra:"", image:"", gallery:[], relationships:[], externalRelationships:[], postypes:[] };
+  const others = Object.values(charsCache).filter(o => o.id !== c.id);
+
+  return `<form class="editor-box" id="char-form">
+    <h2 style="margin-bottom:18px;">${existing ? "캐릭터 수정하기" : "새 캐릭터 만들기"}</h2>
+
+    <div class="field-group"><label>대표 이미지 URL</label><input id="f-image" value="${esc(c.image)}" placeholder="https://..."></div>
+
+    <div class="form-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field-group"><label>이름 *</label><input id="f-name" value="${esc(c.name)}" placeholder="캐릭터 이름" required></div>
+      <div class="field-group"><label>직업</label><input id="f-job" value="${esc(c.job)}" placeholder="예: 학생, 용병..."></div>
+    </div>
+    <div class="form-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field-group"><label>나이</label><input id="f-age" value="${esc(c.age)}" placeholder="예: 17"></div>
+      <div class="field-group"><label>생일</label><input id="f-birthday" value="${esc(c.birthday)}" placeholder="예: 3월 14일"></div>
+    </div>
+    <div class="form-row-3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div class="field-group"><label>키</label><input id="f-height" value="${esc(c.height)}" placeholder="예: 170cm"></div>
+      <div class="field-group"><label>몸무게</label><input id="f-weight" value="${esc(c.weight)}" placeholder="예: 55kg"></div>
+      <div class="field-group"><label>체형</label><input id="f-bodyType" value="${esc(c.bodyType)}" placeholder="예: 마른 편"></div>
+    </div>
+    <div class="field-group"><label>세계관</label><textarea id="f-worldview" style="min-height:80px;">${esc(c.worldview)}</textarea></div>
+    <div class="field-group"><label>성격</label><textarea id="f-personality" style="min-height:90px;">${esc(c.personality)}</textarea></div>
+    <div class="field-group"><label>취미</label><input id="f-hobby" value="${esc(c.hobby)}" placeholder="예: 독서, 그림 그리기"></div>
+    <div class="field-group"><label>기타</label><input id="f-extra" value="${esc(c.extra)}" placeholder="자유롭게 입력"></div>
+
+    <div class="field-group">
+      <label>관계도 (내 캐릭터끼리)</label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="rel-target" style="flex:1 1 140px;"><option value="">캐릭터 선택</option>
+          ${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join("")}
+        </select>
+        <input id="rel-label" style="flex:1 1 140px;" placeholder="관계 (예: 소꿉친구)">
+        <button type="button" class="small-btn" id="add-rel">🔗 추가</button>
+      </div>
+      <div id="rel-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+
+    <div class="field-group">
+      <label>다른 사람 캐릭터와의 관계 (이름/관계 자유 입력)</label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <input id="ext-name" style="flex:1 1 120px;" placeholder="캐릭터 이름">
+        <input id="ext-label" style="flex:1 1 120px;" placeholder="관계 (예: 라이벌)">
+        <input id="ext-owner" style="flex:1 1 120px;" placeholder="오너 닉네임 (선택)">
+        <button type="button" class="small-btn" id="add-ext">🔗 추가</button>
+      </div>
+      <div id="ext-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+
+    <div class="field-group">
+      <label>추가 이미지 / 일러스트</label>
+      <div id="gallery-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+
+    <div class="field-group">
+      <label>포스타입 연재</label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <input id="pt-title" style="flex:1 1 140px;" placeholder="시리즈/연재 제목">
+        <input id="pt-url" style="flex:1 1 180px;" placeholder="https://postype.com/...">
+        <button type="button" class="small-btn" id="add-pt">📖 추가</button>
+      </div>
+      <div id="pt-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end;">
+      <button type="button" class="ghost-btn" id="cancel-edit">취소</button>
+      <button type="submit" class="primary-btn">💾 저장하기</button>
+    </div>
+  </form>`;
+}
+
+function bindEditorEvents(existing){
+  const state = existing ? JSON.parse(JSON.stringify(existing)) : {
+    id: uid(), relationships:[], externalRelationships:[], gallery:[], postypes:[]
+  };
+  state.relationships = state.relationships || [];
+  state.externalRelationships = state.externalRelationships || [];
+  state.gallery = state.gallery || [];
+  state.postypes = state.postypes || [];
+
+  function renderRelList(){
+    document.getElementById("rel-list").innerHTML = state.relationships.map((r,i) => {
+      const t = charsCache[r.targetId];
+      return `<span class="chip">${esc(t?.name||"?")} · ${esc(r.label)} <button data-i="${i}" class="rm-rel" style="border:none;background:none;cursor:pointer;">✕</button></span>`;
+    }).join("");
+    document.querySelectorAll(".rm-rel").forEach(b => b.onclick = () => { state.relationships.splice(+b.dataset.i,1); renderRelList(); });
+  }
+  function renderExtList(){
+    document.getElementById("ext-list").innerHTML = state.externalRelationships.map((r,i) => `
+      <span class="chip soft">${esc(r.name)} · ${esc(r.label)}${r.owner?` (${esc(r.owner)} 소유)`:""} <button data-i="${i}" class="rm-ext" style="border:none;background:none;cursor:pointer;">✕</button></span>
+    `).join("");
+    document.querySelectorAll(".rm-ext").forEach(b => b.onclick = () => { state.externalRelationships.splice(+b.dataset.i,1); renderExtList(); });
+  }
+  function renderGalleryList(){
+    document.getElementById("gallery-list").innerHTML = state.gallery.map((src,i) => `
+      <div style="position:relative;">
+        <img src="${esc(src)}" style="width:70px;height:70px;object-fit:cover;border-radius:10px;border:2px solid #fff;">
+        <button data-i="${i}" class="rm-gal" style="position:absolute;top:-6px;right:-6px;background:var(--accent1);border:none;border-radius:50%;width:18px;height:18px;color:#fff;cursor:pointer;">✕</button>
+      </div>`).join("") + `<button type="button" class="small-btn" id="add-gal" style="width:70px;height:70px;">+</button>`;
+    document.querySelectorAll(".rm-gal").forEach(b => b.onclick = () => { state.gallery.splice(+b.dataset.i,1); renderGalleryList(); });
+    document.getElementById("add-gal").onclick = () => { const u = prompt("이미지 URL을 입력해주세요"); if (u) { state.gallery.push(u); renderGalleryList(); } };
+  }
+  function renderPtList(){
+    document.getElementById("pt-list").innerHTML = state.postypes.map((p,i) => `
+      <div class="postype-link" style="justify-content:space-between;">
+        <span>📖 ${esc(p.title)}</span>
+        <button data-i="${i}" class="rm-pt" style="background:none;border:none;cursor:pointer;">✕</button>
+      </div>`).join("");
+    document.querySelectorAll(".rm-pt").forEach(b => b.onclick = () => { state.postypes.splice(+b.dataset.i,1); renderPtList(); });
+  }
+
+  renderRelList(); renderExtList(); renderGalleryList(); renderPtList();
+
+  document.getElementById("add-rel").onclick = () => {
+    const targetId = document.getElementById("rel-target").value;
+    const label = document.getElementById("rel-label").value.trim();
+    if (!targetId || !label) return;
+    state.relationships.push({ targetId, label });
+    document.getElementById("rel-label").value = "";
+    renderRelList();
+  };
+  document.getElementById("add-ext").onclick = () => {
+    const name = document.getElementById("ext-name").value.trim();
+    const label = document.getElementById("ext-label").value.trim();
+    const owner = document.getElementById("ext-owner").value.trim();
+    if (!name || !label) return;
+    state.externalRelationships.push({ name, label, owner });
+    document.getElementById("ext-name").value = "";
+    document.getElementById("ext-label").value = "";
+    document.getElementById("ext-owner").value = "";
+    renderExtList();
+  };
+  document.getElementById("add-pt").onclick = () => {
+    const title = document.getElementById("pt-title").value.trim();
+    const url = document.getElementById("pt-url").value.trim();
+    if (!url) return;
+    state.postypes.push({ title: title || url, url });
+    document.getElementById("pt-title").value = "";
+    document.getElementById("pt-url").value = "";
+    renderPtList();
+  };
+
+  document.getElementById("cancel-edit").onclick = () => go(existing ? "/char/"+existing.id : "/");
+
+  document.getElementById("char-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const get = id => document.getElementById(id).value.trim();
+    const c = {
+      ...state,
+      name:get("f-name"), job:get("f-job"), age:get("f-age"), birthday:get("f-birthday"),
+      height:get("f-height"), weight:get("f-weight"), bodyType:get("f-bodyType"),
+      worldview:get("f-worldview"), personality:get("f-personality"), hobby:get("f-hobby"),
+      extra:get("f-extra"), image:get("f-image"),
+    };
+    if (!c.name) { toast("이름은 필수예요!"); return; }
+    charsCache[c.id] = c; // 화면엔 즉시 반영
+    try {
+      await saveCharacter(c);
+      toast("저장했어요 ✨");
+    } catch (err) {
+      toast("저장 실패: " + err.message);
+    }
+    go("/char/" + c.id);
+  };
+}
+
+/* -------------------------------- 시작 -------------------------------- */
+(async function init(){
+  applySeason(localStorage.getItem("oc-season") || "summer");
+  await fetchAllChars();
+  await render();
+})();
+</script>
+</body>
+</html>
