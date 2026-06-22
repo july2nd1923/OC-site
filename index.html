@@ -146,12 +146,47 @@ function applySeason(key){
 
 /* ----------------------------- 데이터 계층 ----------------------------- */
 let charsCache = {};
+let charOrder = []; // 캐릭터 순서 저장
+
+async function loadOrder(){
+  try {
+    const r = await sb.from("characters").select("id, created_at").order("created_at", {ascending:true});
+    if (r.data) charOrder = r.data.map(x => x.id).filter(id => charsCache[id]);
+  } catch {}
+}
+async function saveOrder(){
+  // 순서를 각 캐릭터의 updated_at에 인코딩하는 대신, 별도 키로 Supabase에 저장해요
+  // 여기선 JSON 문자열을 id="__order__" 인 레코드에 저장해요
+  try {
+    await sb.from("characters").upsert({
+      id: "__order__",
+      data: { order: charOrder },
+      updated_at: new Date().toISOString()
+    });
+  } catch {}
+}
+async function fetchOrder(){
+  try {
+    const r = await sb.from("characters").select("data").eq("id","__order__").single();
+    if (r.data?.data?.order) return r.data.data.order;
+  } catch {}
+  return null;
+}
 
 async function fetchAllChars(){
   const { data, error } = await sb.from("characters").select("*").order("created_at", { ascending:true });
   if (error) { console.error(error); toast("불러오기 실패: " + error.message); return []; }
   charsCache = {};
-  data.forEach(row => charsCache[row.id] = row.data);
+  data.forEach(row => { if(row.id !== "__order__") charsCache[row.id] = row.data; });
+  // 저장된 순서 불러오기
+  const saved = await fetchOrder();
+  if (saved) {
+    charOrder = saved.filter(id => charsCache[id]);
+    // 새로 추가된 캐릭터(순서에 없는 것) 뒤에 붙이기
+    Object.keys(charsCache).forEach(id => { if(!charOrder.includes(id)) charOrder.push(id); });
+  } else {
+    charOrder = Object.keys(charsCache);
+  }
   return data;
 }
 async function saveCharacter(c){
@@ -291,7 +326,7 @@ function showLoginModal(){
 }
 
 function renderGallery(){
-  const ids = Object.keys(charsCache);
+  const ids = charOrder.filter(id => charsCache[id]);
   const newBtnHtml = isLoggedIn() ? `<button class="primary-btn" id="new-char-btn">+ 새 캐릭터</button>` : "";
   if (ids.length === 0) {
     return `<div class="empty">
@@ -308,7 +343,7 @@ function renderGallery(){
         const c = charsCache[id];
         const color = pickColor(id);
         return `
-        <button class="card" data-open="${id}">
+        <button class="card" draggable="true" data-id="${id}" data-open="${id}">
           <div class="washi" style="background:${color}"></div>
           <div class="thumb" style="background-image:${c.image?`url('${esc(c.image)}')`:`linear-gradient(135deg, ${color}, #fff)`}"></div>
           <p class="name">${esc(c.name)||"이름 없음"}</p>
@@ -320,8 +355,77 @@ function renderGallery(){
 function bindGalleryEvents(){
   const newBtn = document.getElementById("new-char-btn");
   if (newBtn) newBtn.onclick = () => go("/edit/new");
+
   document.querySelectorAll("[data-open]").forEach(el => {
     el.onclick = () => go("/char/" + el.dataset.open);
+  });
+
+  // 드래그 앤 드롭 (PC 마우스 + 모바일 터치)
+  let dragSrcId = null;
+  let touchSrcId = null;
+  let longPressTimer = null;
+  const LONG_PRESS_MS = 500;
+
+  document.querySelectorAll(".card[data-id]").forEach(card => {
+    const id = card.dataset.id;
+
+    // ---- 마우스 드래그 (PC) ----
+    card.addEventListener("dragstart", e => {
+      dragSrcId = id;
+      card.style.opacity = "0.5";
+      e.dataTransfer.effectAllowed = "move";
+    });
+    card.addEventListener("dragend", () => { card.style.opacity = ""; });
+    card.addEventListener("dragover", e => { e.preventDefault(); card.style.outline = "2px solid var(--accent1)"; });
+    card.addEventListener("dragleave", () => { card.style.outline = ""; });
+    card.addEventListener("drop", async e => {
+      e.preventDefault();
+      card.style.outline = "";
+      if (!dragSrcId || dragSrcId === id) return;
+      const from = charOrder.indexOf(dragSrcId);
+      const to = charOrder.indexOf(id);
+      if (from < 0 || to < 0) return;
+      charOrder.splice(from, 1);
+      charOrder.splice(to, 0, dragSrcId);
+      await saveOrder();
+      render();
+    });
+
+    // ---- 터치 길게 눌러서 드래그 (모바일) ----
+    card.addEventListener("touchstart", e => {
+      longPressTimer = setTimeout(() => {
+        touchSrcId = id;
+        card.style.outline = "3px solid var(--accent1)";
+        card.style.transform = "scale(0.96)";
+        navigator.vibrate && navigator.vibrate(40);
+        toast("이동할 위치의 카드를 탭하세요");
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+    card.addEventListener("touchend", async e => {
+      clearTimeout(longPressTimer);
+      if (touchSrcId && touchSrcId !== id) {
+        // 목적지 탭됨
+        document.querySelectorAll(".card").forEach(c => { c.style.outline=""; c.style.transform=""; });
+        const from = charOrder.indexOf(touchSrcId);
+        const to = charOrder.indexOf(id);
+        if (from >= 0 && to >= 0) {
+          charOrder.splice(from, 1);
+          charOrder.splice(to, 0, touchSrcId);
+          await saveOrder();
+          render();
+        }
+        touchSrcId = null;
+        e.preventDefault(); // 이동 모드면 클릭 막기
+      } else if (touchSrcId === id) {
+        // 같은 카드 탭 = 취소
+        document.querySelectorAll(".card").forEach(c => { c.style.outline=""; c.style.transform=""; });
+        touchSrcId = null;
+        e.preventDefault();
+      } else {
+        clearTimeout(longPressTimer);
+      }
+    });
+    card.addEventListener("touchmove", () => { clearTimeout(longPressTimer); }, { passive: true });
   });
 }
 
@@ -349,7 +453,6 @@ function renderDetail(c, comments){
 
     <div class="detail-grid">
       <div>
-        ${c.tagline?`<p style="font-family:'Baloo 2',sans-serif;font-size:15px;color:var(--accent2);text-align:center;margin-bottom:10px;font-style:italic;">"${esc(c.tagline)}"</p>`:""}
         <div class="hero-img" style="background-image:${c.image?`url('${esc(c.image)}')`:`linear-gradient(135deg, ${color}, #fff)`}"></div>
         <div class="profile-box">
           ${profileRow("이름", c.name)}
@@ -359,14 +462,13 @@ function renderDetail(c, comments){
           ${profileRow("키", c.height)}
           ${profileRow("몸무게", c.weight)}
           ${profileRow("체형", c.bodyType)}
-          ${profileRow("기타", c.extra)}
         </div>
       </div>
       <div>
         <div class="section"><h3>🌍 세계관</h3><p class="body-text">${esc(c.worldview)||"아직 작성된 세계관이 없어요."}</p></div>
-        ${c.appearance?`<div class="section"><h3>👀 외관</h3><p class="body-text">${esc(c.appearance)}</p></div>`:""}
         <div class="section"><h3>💗 성격</h3><p class="body-text">${esc(c.personality)||"아직 작성된 성격이 없어요."}</p></div>
         <div class="section"><h3>🎨 취미</h3><p class="body-text">${esc(c.hobby)||"아직 작성된 취미가 없어요."}</p></div>
+        ${c.extra?`<div class="section"><h3>📝 기타</h3><p class="body-text">${esc(c.extra)}</p></div>`:""}
 
         <div class="section">
           <h3>💞 관계도</h3>
@@ -449,6 +551,8 @@ function bindDetailEvents(c){
       try {
         await deleteCharacter(c.id);
         delete charsCache[c.id];
+        charOrder = charOrder.filter(id => id !== c.id);
+        await saveOrder();
         toast("캐릭터를 삭제했어요");
         go("/");
       } catch (err) { toast("삭제 실패: " + err.message); }
@@ -483,19 +587,7 @@ function renderEditor(existing){
   return `<form class="editor-box" id="char-form">
     <h2 style="margin-bottom:18px;">${existing ? "캐릭터 수정하기" : "새 캐릭터 만들기"}</h2>
 
-    <div class="field-group">
-      <label>대표 이미지</label>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <div id="img-preview" style="width:80px;height:80px;border-radius:12px;border:2px solid var(--border);background:${c.image?`center/cover no-repeat url(${esc(c.image)})`:"var(--soft)"};flex-shrink:0;"></div>
-        <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
-          <label class="primary-btn" style="cursor:pointer;justify-content:center;" for="f-image-file">📁 파일 선택</label>
-          <input type="file" id="f-image-file" accept="image/*" style="display:none;">
-          <input id="f-image" type="hidden" value="${esc(c.image)}">
-          <span id="img-status" style="font-size:12px;color:var(--text-soft);">${c.image?"이미지 등록됨":"파일을 선택해주세요"}</span>
-        </div>
-      </div>
-    </div>
-    <div class="field-group"><label>한마디</label><input id="f-tagline" value="${esc(c.tagline||"")}" placeholder="캐릭터를 한 줄로 표현하면? (예: 세상을 구하러 온 게 아니라 그냥 배고팠을 뿐)"></div>
+    <div class="field-group"><label>대표 이미지 URL</label><input id="f-image" value="${esc(c.image)}" placeholder="https://..."></div>
 
     <div class="form-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="field-group"><label>이름 *</label><input id="f-name" value="${esc(c.name)}" placeholder="캐릭터 이름" required></div>
@@ -511,10 +603,9 @@ function renderEditor(existing){
       <div class="field-group"><label>체형</label><input id="f-bodyType" value="${esc(c.bodyType)}" placeholder="예: 마른 편"></div>
     </div>
     <div class="field-group"><label>세계관</label><textarea id="f-worldview" style="min-height:80px;">${esc(c.worldview)}</textarea></div>
-    <div class="field-group"><label>외관</label><textarea id="f-appearance" style="min-height:80px;">${esc(c.appearance||"")}</textarea></div>
     <div class="field-group"><label>성격</label><textarea id="f-personality" style="min-height:90px;">${esc(c.personality)}</textarea></div>
     <div class="field-group"><label>취미</label><input id="f-hobby" value="${esc(c.hobby)}" placeholder="예: 독서, 그림 그리기"></div>
-    <div class="field-group"><label>기타</label><input id="f-extra" value="${esc(c.extra)}" placeholder="자유롭게 입력"></div>
+    <div class="field-group"><label>기타</label><textarea id="f-extra" style="min-height:180px;resize:vertical;" placeholder="자유롭게 입력 (MBTI, 좋아하는 것, 말투, 에피소드 등)">${esc(c.extra)}</textarea></div>
 
     <div class="field-group">
       <label>관계도 (내 캐릭터끼리)</label>
@@ -563,7 +654,7 @@ function renderEditor(existing){
 
 function bindEditorEvents(existing){
   const state = existing ? JSON.parse(JSON.stringify(existing)) : {
-    id: uid(), tagline:"", appearance:"", relationships:[], externalRelationships:[], gallery:[], postypes:[]
+    id: uid(), relationships:[], externalRelationships:[], gallery:[], postypes:[]
   };
   state.relationships = state.relationships || [];
   state.externalRelationships = state.externalRelationships || [];
@@ -603,31 +694,6 @@ function bindEditorEvents(existing){
 
   renderRelList(); renderExtList(); renderGalleryList(); renderPtList();
 
-  // 대표 이미지 파일 업로드
-  const imageFileInput = document.getElementById("f-image-file");
-  if (imageFileInput) {
-    imageFileInput.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const statusEl = document.getElementById("img-status");
-      const previewEl = document.getElementById("img-preview");
-      statusEl.textContent = "업로드 중...";
-      try {
-        const ext = file.name.split(".").pop();
-        const fileName = `char-${state.id}-${Date.now()}.${ext}`;
-        const { data, error } = await sb.storage.from("images").upload(fileName, file, { upsert: true });
-        if (error) throw error;
-        const { data: pub } = sb.storage.from("images").getPublicUrl(fileName);
-        const url = pub.publicUrl;
-        document.getElementById("f-image").value = url;
-        previewEl.style.background = `center/cover no-repeat url(${url})`;
-        statusEl.textContent = "✅ 업로드 완료!";
-      } catch (err) {
-        statusEl.textContent = "❌ 업로드 실패: " + err.message;
-      }
-    };
-  }
-
   document.getElementById("add-rel").onclick = () => {
     const targetId = document.getElementById("rel-target").value;
     const label = document.getElementById("rel-label").value.trim();
@@ -666,12 +732,12 @@ function bindEditorEvents(existing){
       ...state,
       name:get("f-name"), job:get("f-job"), age:get("f-age"), birthday:get("f-birthday"),
       height:get("f-height"), weight:get("f-weight"), bodyType:get("f-bodyType"),
-      tagline:get("f-tagline"), worldview:get("f-worldview"), appearance:get("f-appearance"),
-      personality:get("f-personality"), hobby:get("f-hobby"),
+      worldview:get("f-worldview"), personality:get("f-personality"), hobby:get("f-hobby"),
       extra:get("f-extra"), image:get("f-image"),
     };
     if (!c.name) { toast("이름은 필수예요!"); return; }
     charsCache[c.id] = c; // 화면엔 즉시 반영
+    if (!charOrder.includes(c.id)) charOrder.push(c.id);
     try {
       await saveCharacter(c);
       toast("저장했어요 ✨");
