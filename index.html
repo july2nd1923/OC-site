@@ -349,6 +349,7 @@ function renderDetail(c, comments){
 
     <div class="detail-grid">
       <div>
+        ${c.tagline?`<p style="font-family:'Baloo 2',sans-serif;font-size:15px;color:var(--accent2);text-align:center;margin-bottom:10px;font-style:italic;">"${esc(c.tagline)}"</p>`:""}
         <div class="hero-img" style="background-image:${c.image?`url('${esc(c.image)}')`:`linear-gradient(135deg, ${color}, #fff)`}"></div>
         <div class="profile-box">
           ${profileRow("이름", c.name)}
@@ -363,6 +364,7 @@ function renderDetail(c, comments){
       </div>
       <div>
         <div class="section"><h3>🌍 세계관</h3><p class="body-text">${esc(c.worldview)||"아직 작성된 세계관이 없어요."}</p></div>
+        ${c.appearance?`<div class="section"><h3>👀 외관</h3><p class="body-text">${esc(c.appearance)}</p></div>`:""}
         <div class="section"><h3>💗 성격</h3><p class="body-text">${esc(c.personality)||"아직 작성된 성격이 없어요."}</p></div>
         <div class="section"><h3>🎨 취미</h3><p class="body-text">${esc(c.hobby)||"아직 작성된 취미가 없어요."}</p></div>
 
@@ -481,7 +483,19 @@ function renderEditor(existing){
   return `<form class="editor-box" id="char-form">
     <h2 style="margin-bottom:18px;">${existing ? "캐릭터 수정하기" : "새 캐릭터 만들기"}</h2>
 
-    <div class="field-group"><label>대표 이미지 URL</label><input id="f-image" value="${esc(c.image)}" placeholder="https://..."></div>
+    <div class="field-group">
+      <label>대표 이미지</label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div id="img-preview" style="width:80px;height:80px;border-radius:12px;border:2px solid var(--border);background:${c.image?`center/cover no-repeat url(${esc(c.image)})`:"var(--soft)"};flex-shrink:0;"></div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+          <label class="primary-btn" style="cursor:pointer;justify-content:center;" for="f-image-file">📁 파일 선택</label>
+          <input type="file" id="f-image-file" accept="image/*" style="display:none;">
+          <input id="f-image" type="hidden" value="${esc(c.image)}">
+          <span id="img-status" style="font-size:12px;color:var(--text-soft);">${c.image?"이미지 등록됨":"파일을 선택해주세요"}</span>
+        </div>
+      </div>
+    </div>
+    <div class="field-group"><label>한마디</label><input id="f-tagline" value="${esc(c.tagline||"")}" placeholder="캐릭터를 한 줄로 표현하면? (예: 세상을 구하러 온 게 아니라 그냥 배고팠을 뿐)"></div>
 
     <div class="form-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="field-group"><label>이름 *</label><input id="f-name" value="${esc(c.name)}" placeholder="캐릭터 이름" required></div>
@@ -497,6 +511,7 @@ function renderEditor(existing){
       <div class="field-group"><label>체형</label><input id="f-bodyType" value="${esc(c.bodyType)}" placeholder="예: 마른 편"></div>
     </div>
     <div class="field-group"><label>세계관</label><textarea id="f-worldview" style="min-height:80px;">${esc(c.worldview)}</textarea></div>
+    <div class="field-group"><label>외관</label><textarea id="f-appearance" style="min-height:80px;">${esc(c.appearance||"")}</textarea></div>
     <div class="field-group"><label>성격</label><textarea id="f-personality" style="min-height:90px;">${esc(c.personality)}</textarea></div>
     <div class="field-group"><label>취미</label><input id="f-hobby" value="${esc(c.hobby)}" placeholder="예: 독서, 그림 그리기"></div>
     <div class="field-group"><label>기타</label><input id="f-extra" value="${esc(c.extra)}" placeholder="자유롭게 입력"></div>
@@ -548,7 +563,7 @@ function renderEditor(existing){
 
 function bindEditorEvents(existing){
   const state = existing ? JSON.parse(JSON.stringify(existing)) : {
-    id: uid(), relationships:[], externalRelationships:[], gallery:[], postypes:[]
+    id: uid(), tagline:"", appearance:"", relationships:[], externalRelationships:[], gallery:[], postypes:[]
   };
   state.relationships = state.relationships || [];
   state.externalRelationships = state.externalRelationships || [];
@@ -588,6 +603,31 @@ function bindEditorEvents(existing){
 
   renderRelList(); renderExtList(); renderGalleryList(); renderPtList();
 
+  // 대표 이미지 파일 업로드
+  const imageFileInput = document.getElementById("f-image-file");
+  if (imageFileInput) {
+    imageFileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById("img-status");
+      const previewEl = document.getElementById("img-preview");
+      statusEl.textContent = "업로드 중...";
+      try {
+        const ext = file.name.split(".").pop();
+        const fileName = `char-${state.id}-${Date.now()}.${ext}`;
+        const { data, error } = await sb.storage.from("images").upload(fileName, file, { upsert: true });
+        if (error) throw error;
+        const { data: pub } = sb.storage.from("images").getPublicUrl(fileName);
+        const url = pub.publicUrl;
+        document.getElementById("f-image").value = url;
+        previewEl.style.background = `center/cover no-repeat url(${url})`;
+        statusEl.textContent = "✅ 업로드 완료!";
+      } catch (err) {
+        statusEl.textContent = "❌ 업로드 실패: " + err.message;
+      }
+    };
+  }
+
   document.getElementById("add-rel").onclick = () => {
     const targetId = document.getElementById("rel-target").value;
     const label = document.getElementById("rel-label").value.trim();
@@ -626,7 +666,8 @@ function bindEditorEvents(existing){
       ...state,
       name:get("f-name"), job:get("f-job"), age:get("f-age"), birthday:get("f-birthday"),
       height:get("f-height"), weight:get("f-weight"), bodyType:get("f-bodyType"),
-      worldview:get("f-worldview"), personality:get("f-personality"), hobby:get("f-hobby"),
+      tagline:get("f-tagline"), worldview:get("f-worldview"), appearance:get("f-appearance"),
+      personality:get("f-personality"), hobby:get("f-hobby"),
       extra:get("f-extra"), image:get("f-image"),
     };
     if (!c.name) { toast("이름은 필수예요!"); return; }
