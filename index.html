@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>나의 캐릭터 도감</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -472,7 +475,6 @@ function renderDetail(c, comments){
         ${c.appearance?`<div class="section"><h3>👀 외관</h3><p class="body-text">${esc(c.appearance)}</p></div>`:""}
         <div class="section"><h3>💗 성격</h3><p class="body-text">${esc(c.personality)||"아직 작성된 성격이 없어요."}</p></div>
         <div class="section"><h3>🎨 취미</h3><p class="body-text">${esc(c.hobby)||"아직 작성된 취미가 없어요."}</p></div>
-        ${c.extra?`<div class="section"><h3>📝 기타</h3><p class="body-text">${esc(c.extra)}</p></div>`:""}
         ${c.extra?`<div class="section"><h3>📝 기타</h3><p class="body-text">${esc(c.extra)}</p></div>`:""}
 
         <div class="section">
